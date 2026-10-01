@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PlantCare — Live Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.3/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #8b5e7f;
+    --panel: #2d302e;
+    --accent: #6ee7a0;
+    --accent2: #543f4b;
+    --text: #e7ede8;
+    --muted: #8ba090;
+    --border: #233024;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 20px 16px 60px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 20px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .card .label {
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .card .value {
+    font-size: 1.6rem;
+    font-weight: 600;
+  }
+  .card .value.soil { color: var(--accent); }
+  .card .value.temp { color: var(--accent2); }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .panel h2 {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+
+  .mode-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .mode-btn {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .mode-btn.active {
+    background: var(--accent);
+    color: #0e1410;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+
+  button.water-now {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent2);
+    color: #1a1208;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  button.water-now:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+  }
+  .dot.on { background: var(--accent); }
+
+  label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 4px; }
+  input[type="range"], input[type="number"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  .slider-row { margin-bottom: 14px; }
+  .slider-row .val { color: var(--text); font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+
+  canvas { max-height: 220px; }
+</style>
+</head>
+<body>
+
+<h1>🌱 PlantCare</h1>
+<div class="sub">Live soil + climate monitoring, with auto or manual watering control.</div>
+
+<div class="grid">
+  <div class="card">
+    <div class="label">Soil Moisture</div>
+    <div class="value soil" id="soilVal">--%</div>
+  </div>
+  <div class="card">
+    <div class="label">Temperature</div>
+    <div class="value temp" id="tempVal">--°C</div>
+  </div>
+  <div class="card">
+    <div class="label">Humidity</div>
+    <div class="value" id="humVal">--%</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Mode</h2>
+  <div class="mode-toggle">
+    <button class="mode-btn" id="autoBtn" onclick="setMode('auto')">Auto</button>
+    <button class="mode-btn" id="manualBtn" onclick="setMode('manual')">Manual</button>
+  </div>
+
+  <button class="water-now" id="waterBtn" onclick="waterNow()">💧 Water Now</button>
+
+  <div class="status-row">
+    <div class="dot" id="pumpDot"></div>
+    <span id="pumpStatus">Pump idle</span>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Settings</h2>
+  <div class="slider-row">
+    <label>Auto-water threshold: <span class="val" id="thresholdVal">30</span>%</label>
+    <input type="range" id="thresholdSlider" min="5" max="80" value="30" oninput="updateThresholdLabel(this.value)" onchange="saveSettings()">
+  </div>
+  <div class="slider-row">
+    <label>Watering duration: <span class="val" id="durationVal">5</span>s</label>
+    <input type="range" id="durationSlider" min="1" max="20" value="5" oninput="updateDurationLabel(this.value)" onchange="saveSettings()">
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Soil Moisture — Last readings</h2>
+  <canvas id="soilChart"></canvas>
+</div>
+
+<div class="panel">
+  <h2>Watering History</h2>
+  <table>
+    <thead><tr><th>When</th><th>Mode</th><th>Soil before</th></tr></thead>
+    <tbody id="historyBody"></tbody>
+  </table>
+</div>
+
+<script>
+  // ---- CONFIG: set this to your deployed backend URL ----
+  const API_BASE = "https://YOUR-RENDER-BACKEND-URL.onrender.com";
+  const WS_URL = API_BASE.replace("https://", "wss://").replace("http://", "ws://");
+
+  let currentMode = "auto";
+
+  const soilVal = document.getElementById("soilVal");
+  const tempVal = document.getElementById("tempVal");
+  const humVal = document.getElementById("humVal");
+  const pumpDot = document.getElementById("pumpDot");
+  const pumpStatus = document.getElementById("pumpStatus");
+
+  const ctx = document.getElementById("soilChart").getContext("2d");
+  const chart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [{
+        label: "Soil moisture %",
+        data: [],
+        borderColor: "#6ee7a0",
+        backgroundColor: "rgba(110,231,160,0.1)",
+        tension: 0.3,
+        fill: true,
+        pointRadius: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { ticks: { color: "#8ba090" }, grid: { color: "#233024" } },
+        y: { min: 0, max: 100, ticks: { color: "#8ba090" }, grid: { color: "#233024" } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  function updateReadingUI(r) {
+    soilVal.textContent = r.soil + "%";
+    tempVal.textContent = r.temp + "°C";
+    humVal.textContent = r.humidity + "%";
+
+    pumpDot.classList.toggle("on", r.pumpOn);
+    pumpStatus.textContent = r.pumpOn ? "Pump watering now" : "Pump idle";
+
+    const label = new Date(r.timestamp).toLocaleTimeString();
+    chart.data.labels.push(label);
+    chart.data.datasets[0].data.push(r.soil);
+    if (chart.data.labels.length > 40) {
+      chart.data.labels.shift();
+      chart.data.datasets[0].data.shift();
+    }
+    chart.update();
+  }
+
+  function setActiveModeButtons(mode) {
+    document.getElementById("autoBtn").classList.toggle("active", mode === "auto");
+    document.getElementById("manualBtn").classList.toggle("active", mode === "manual");
+    document.getElementById("waterBtn").disabled = false; // manual "water now" always allowed
+  }
+
+  async function setMode(mode) {
+    currentMode = mode;
+    setActiveModeButtons(mode);
+    await saveSettings();
+  }
+
+  async function saveSettings() {
+    const threshold = parseInt(document.getElementById("thresholdSlider").value);
+    const duration = parseInt(document.getElementById("durationSlider").value) * 1000;
+
+    await fetch(`${API_BASE}/api/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: currentMode, threshold, duration })
+    });
+  }
+
+  function updateThresholdLabel(v) {
+    document.getElementById("thresholdVal").textContent = v;
+  }
+  function updateDurationLabel(v) {
+    document.getElementById("durationVal").textContent = v;
+  }
+
+  async function waterNow() {
+    await fetch(`${API_BASE}/api/water-now`, { method: "POST" });
+  }
+
+  async function loadInitial() {
+    const settings = await (await fetch(`${API_BASE}/api/settings`)).json();
+    currentMode = settings.mode;
+    setActiveModeButtons(currentMode);
+    document.getElementById("thresholdSlider").value = settings.threshold;
+    updateThresholdLabel(settings.threshold);
+    document.getElementById("durationSlider").value = settings.duration / 1000;
+    updateDurationLabel(settings.duration / 1000);
+
+    const latest = await (await fetch(`${API_BASE}/api/latest`)).json();
+    if (latest) updateReadingUI(latest);
+
+    const history = await (await fetch(`${API_BASE}/api/history?limit=40`)).json();
+    history.forEach(updateReadingUI);
+
+    const events = await (await fetch(`${API_BASE}/api/watering-events`)).json();
+    const tbody = document.getElementById("historyBody");
+    tbody.innerHTML = "";
+    events.forEach(e => {
+      const row = document.createElement("tr");
+      row.innerHTML = `<td>${new Date(e.timestamp).toLocaleString()}</td><td>${e.mode}</td><td>${e.soilBefore}%</td>`;
+      tbody.appendChild(row);
+    });
+  }
+
+  function connectWS() {
+    const ws = new WebSocket(WS_URL);
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "reading") updateReadingUI(msg.data);
+      } catch (e) {}
+    };
+    ws.onclose = () => setTimeout(connectWS, 3000); // auto-reconnect
+  }
+
+  loadInitial();
+  connectWS();
+</script>
+
+</body>
+</html>
