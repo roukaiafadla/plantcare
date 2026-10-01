@@ -197,7 +197,7 @@
 </div>
 
 <script>
-  //configuration  set this to ur deployed backend url
+  // Target deployed Render backend URL
   const API_BASE = "https://plantcare-xagi.onrender.com";
   const WS_URL = API_BASE.replace("https://", "wss://").replace("http://", "ws://");
 
@@ -235,27 +235,32 @@
   });
 
   function updateReadingUI(r) {
-    soilVal.textContent = r.soil + "%";
-    tempVal.textContent = r.temp + "°C";
-    humVal.textContent = r.humidity + "%";
+    if (!r) return;
 
-    pumpDot.classList.toggle("on", r.pumpOn);
+    soilVal.textContent = (r.soil !== undefined ? r.soil : "--") + "%";
+    tempVal.textContent = (r.temp !== undefined ? r.temp : "--") + "°C";
+    humVal.textContent = (r.humidity !== undefined ? r.humidity : "--") + "%";
+
+    pumpDot.classList.toggle("on", !!r.pumpOn);
     pumpStatus.textContent = r.pumpOn ? "Pump watering now" : "Pump idle";
 
-    const label = new Date(r.timestamp).toLocaleTimeString();
-    chart.data.labels.push(label);
-    chart.data.datasets[0].data.push(r.soil);
-    if (chart.data.labels.length > 40) {
-      chart.data.labels.shift();
-      chart.data.datasets[0].data.shift();
+    if (r.timestamp) {
+      const label = new Date(r.timestamp).toLocaleTimeString();
+      chart.data.labels.push(label);
+      chart.data.datasets[0].data.push(r.soil ?? 0);
+
+      if (chart.data.labels.length > 40) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+      chart.update();
     }
-    chart.update();
   }
 
   function setActiveModeButtons(mode) {
     document.getElementById("autoBtn").classList.toggle("active", mode === "auto");
     document.getElementById("manualBtn").classList.toggle("active", mode === "manual");
-    document.getElementById("waterBtn").disabled = false; // manual "water now" always allowed
+    document.getElementById("waterBtn").disabled = false;
   }
 
   async function setMode(mode) {
@@ -268,11 +273,15 @@
     const threshold = parseInt(document.getElementById("thresholdSlider").value);
     const duration = parseInt(document.getElementById("durationSlider").value) * 1000;
 
-    await fetch(`${API_BASE}/api/settings`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: currentMode, threshold, duration })
-    });
+    try {
+      await fetch(`${API_BASE}/api/settings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: currentMode, threshold, duration })
+      });
+    } catch (err) {
+      console.error("Failed to save settings:", err);
+    }
   }
 
   function updateThresholdLabel(v) {
@@ -283,45 +292,95 @@
   }
 
   async function waterNow() {
-    await fetch(`${API_BASE}/api/water-now`, { method: "POST" });
+    try {
+      await fetch(`${API_BASE}/api/water-now`, { method: "POST" });
+    } catch (err) {
+      console.error("Water request failed:", err);
+    }
   }
 
   async function loadInitial() {
-    const settings = await (await fetch(`${API_BASE}/api/settings`)).json();
-    currentMode = settings.mode;
-    setActiveModeButtons(currentMode);
-    document.getElementById("thresholdSlider").value = settings.threshold;
-    updateThresholdLabel(settings.threshold);
-    document.getElementById("durationSlider").value = settings.duration / 1000;
-    updateDurationLabel(settings.duration / 1000);
+    try {
+      // 1. Fetch Mode & Settings
+      const settingsRes = await fetch(`${API_BASE}/api/settings`);
+      if (settingsRes.ok) {
+        const settings = await settingsRes.json();
+        if (settings && settings.mode) {
+          currentMode = settings.mode;
+          setActiveModeButtons(currentMode);
+          if (settings.threshold !== undefined) {
+            document.getElementById("thresholdSlider").value = settings.threshold;
+            updateThresholdLabel(settings.threshold);
+          }
+          if (settings.duration !== undefined) {
+            document.getElementById("durationSlider").value = settings.duration / 1000;
+            updateDurationLabel(settings.duration / 1000);
+          }
+        }
+      }
 
-    const latest = await (await fetch(`${API_BASE}/api/latest`)).json();
-    if (latest) updateReadingUI(latest);
+      // 2. Fetch Historical Telemetry & Plot Chart
+      const historyRes = await fetch(`${API_BASE}/api/history?limit=40`);
+      if (historyRes.ok) {
+        const history = await historyRes.json();
+        if (Array.isArray(history) && history.length > 0) {
+          chart.data.labels = [];
+          chart.data.datasets[0].data = [];
+          
+          // Reversing places the oldest readings first so chart feeds left-to-right
+          const sortedHistory = [...history].reverse();
+          sortedHistory.forEach(updateReadingUI);
+        }
+      }
 
-    const history = await (await fetch(`${API_BASE}/api/history?limit=40`)).json();
-    history.forEach(updateReadingUI);
-
-    const events = await (await fetch(`${API_BASE}/api/watering-events`)).json();
-    const tbody = document.getElementById("historyBody");
-    tbody.innerHTML = "";
-    events.forEach(e => {
-      const row = document.createElement("tr");
-      row.innerHTML = `<td>${new Date(e.timestamp).toLocaleString()}</td><td>${e.mode}</td><td>${e.soilBefore}%</td>`;
-      tbody.appendChild(row);
-    });
+      // 3. Fetch Watering Event Logs
+      const eventsRes = await fetch(`${API_BASE}/api/watering-events`);
+      if (eventsRes.ok) {
+        const events = await eventsRes.json();
+        const tbody = document.getElementById("historyBody");
+        tbody.innerHTML = "";
+        if (Array.isArray(events)) {
+          events.forEach(e => {
+            const row = document.createElement("tr");
+            row.innerHTML = `<td>${new Date(e.timestamp).toLocaleString()}</td><td>${e.mode || 'N/A'}</td><td>${e.soilBefore ?? '--'}%</td>`;
+            tbody.appendChild(row);
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error connecting to Render backend API:", err);
+    }
   }
 
   function connectWS() {
     const ws = new WebSocket(WS_URL);
+    
+    ws.onopen = () => {
+      console.log("WebSocket connected to Render backend");
+    };
+
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.type === "reading") updateReadingUI(msg.data);
-      } catch (e) {}
+        if (msg.type === "reading") {
+          updateReadingUI(msg.data);
+        }
+      } catch (e) {
+        console.error("WS message parse error:", e);
+      }
     };
-    ws.onclose = () => setTimeout(connectWS, 3000); // auto-reconnect
+
+    ws.onerror = (err) => {
+      console.error("WebSocket error:", err);
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket connection closed. Attempting reconnect in 3s...");
+      setTimeout(connectWS, 3000);
+    };
   }
 
+  // Execute initialization
   loadInitial();
   connectWS();
 </script>
