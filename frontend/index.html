@@ -6,18 +6,18 @@
 <title>PlantCare — Live Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.3/chart.umd.min.js"></script>
 <style>
-  :root {
-    --bg: #8b5e7f;
-    --panel: #2d302e;
-    --accent: #6ee7a0;
-    --accent2: #543f4b;
-    --text: #e7ede8;
-    --muted: #8ba090;
-    --border: #233024;
-    box-sizing: border-box;
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
+:root {
+  --bg: #f4f7f3;
+  --panel: #ffffff;
+  --accent: #2f9e6b;
+  --accent2: #e08a3c;
+  --text: #1f2a22;
+  --muted: #6b7d70;
+  --border: #e2e8e3;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
   * { box-sizing: border-box; }
   body {
     background: var(--bg);
@@ -40,6 +40,7 @@
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 16px;
+    box-shadow: 0 1px 3px rgba(31, 42, 34, 0.06);
   }
   .card .label {
     color: var(--muted);
@@ -61,6 +62,7 @@
     border-radius: 12px;
     padding: 16px;
     margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(31, 42, 34, 0.06);
   }
   .panel h2 {
     font-size: 0.9rem;
@@ -130,7 +132,7 @@
   table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--border); }
   th { color: var(--muted); font-weight: 500; }
-
+  
   canvas { max-height: 220px; }
 </style>
 </head>
@@ -215,8 +217,8 @@
       datasets: [{
         label: "Soil moisture %",
         data: [],
-        borderColor: "#6ee7a0",
-        backgroundColor: "rgba(110,231,160,0.1)",
+        borderColor: "#2f9e6b",
+        backgroundColor: "rgba(47,158,107,0.12)",
         tension: 0.3,
         fill: true,
         pointRadius: 0
@@ -225,8 +227,8 @@
     options: {
       responsive: true,
       scales: {
-        x: { ticks: { color: "#8ba090" }, grid: { color: "#233024" } },
-        y: { min: 0, max: 100, ticks: { color: "#8ba090" }, grid: { color: "#233024" } }
+        x: { ticks: { color: "#6b7d70" }, grid: { color: "#e2e8e3" } },
+        y: { min: 0, max: 100, ticks: { color: "#6b7d70" }, grid: { color: "#e2e8e3" } }
       },
       plugins: { legend: { display: false } }
     }
