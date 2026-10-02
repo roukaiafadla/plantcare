@@ -7,10 +7,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.3/chart.umd.min.js"></script>
 <style>
 :root {
-  --bg: #f4f7f3;
+  --bg: #edf3fa;
   --panel: #ffffff;
-  --accent: #2f9e6b;
-  --accent2: #e08a3c;
+  --accent: #5c9c7e;
+  --accent2: #5993e8;
   --text: #1f2a22;
   --muted: #6b7d70;
   --border: #e2e8e3;
@@ -209,30 +209,35 @@
   const pumpDot = document.getElementById("pumpDot");
   const pumpStatus = document.getElementById("pumpStatus");
 
-  const ctx = document.getElementById("soilChart").getContext("2d");
-  const chart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: [],
-      datasets: [{
-        label: "Soil moisture %",
-        data: [],
-        borderColor: "#2f9e6b",
-        backgroundColor: "rgba(47,158,107,0.12)",
-        tension: 0.3,
-        fill: true,
-        pointRadius: 0
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        x: { ticks: { color: "#6b7d70" }, grid: { color: "#e2e8e3" } },
-        y: { min: 0, max: 100, ticks: { color: "#6b7d70" }, grid: { color: "#e2e8e3" } }
+  let chart = null;
+  try {
+    const ctx = document.getElementById("soilChart").getContext("2d");
+    chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [{
+          label: "Soil moisture %",
+          data: [],
+          borderColor: "#2f9e6b",
+          backgroundColor: "rgba(47,158,107,0.12)",
+          tension: 0.3,
+          fill: true,
+          pointRadius: 0
+        }]
       },
-      plugins: { legend: { display: false } }
-    }
-  });
+      options: {
+        responsive: true,
+        scales: {
+          x: { ticks: { color: "#6b7d70" }, grid: { color: "#e2e8e3" } },
+          y: { min: 0, max: 100, ticks: { color: "#6b7d70" }, grid: { color: "#e2e8e3" } }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+  } catch (err) {
+    console.error("Chart.js failed to load, chart disabled:", err);
+  }
 
   function updateReadingUI(r) {
     if (!r) return;
@@ -244,7 +249,7 @@
     pumpDot.classList.toggle("on", !!r.pumpOn);
     pumpStatus.textContent = r.pumpOn ? "Pump watering now" : "Pump idle";
 
-    if (r.timestamp) {
+    if (r.timestamp && chart) {
       const label = new Date(r.timestamp).toLocaleTimeString();
       chart.data.labels.push(label);
       chart.data.datasets[0].data.push(r.soil ?? 0);
@@ -324,9 +329,11 @@
       if (historyRes.ok) {
         const history = await historyRes.json();
         if (Array.isArray(history) && history.length > 0) {
-          chart.data.labels = [];
-          chart.data.datasets[0].data = [];
-          
+          if (chart) {
+            chart.data.labels = [];
+            chart.data.datasets[0].data = [];
+          }
+
           // Reversing places the oldest readings first so chart feeds left-to-right
           const sortedHistory = [...history].reverse();
           sortedHistory.forEach(updateReadingUI);
